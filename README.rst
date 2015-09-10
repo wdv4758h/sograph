@@ -2,6 +2,23 @@
 sograph - shared objects' graph
 ========================================
 
+::
+
+    +---------+  +-------------------------------+
+    | GNU ldd |  | (Todo) directly read from ELF | ...
+    +---------+  +-------------------------------+
+        |                   |
+        v                   v
+    +-------------------------------------------+
+    | dictionary of shared objects              |
+    +-------------------------------------------+
+        |
+        v
+     +-----+
+     | DOT |
+     +-----+
+
+
 Example
 ========================================
 
@@ -23,3 +40,13 @@ Example
 Result :
 
 .. image:: ./image/ls.png
+
+
+Todo
+========================================
+
+* [frontend] read shared objects dependency from ELF directly
+    - like ``readelf -d /usr/bin/ls | grep NEEDED``
+* use ``OrderedDict`` to make the result consistent
+* [util] detect GNU ldd
+* add more backend (other than DOT)
