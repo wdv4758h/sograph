@@ -43,8 +43,15 @@ class GNU_ldd(object):
 
 
     @staticmethod
-    def _get_result(command: str) -> str:
-        return subprocess.check_output(['ldd', '-v', command]).decode()
+    def _get_result(command: str) -> (str, str):
+        result  = subprocess.check_output(['ldd', '-v', command]).decode()
+
+        # "ldd -u COMMAND" will exit with 1 if it has result
+        unused = subprocess.run(['ldd', '-u', command],
+                                check=False,
+                                stdout=subprocess.PIPE).stdout.decode()
+
+        return (result, unused)
 
 
     @staticmethod
@@ -57,6 +64,10 @@ class GNU_ldd(object):
 
         for line in result.split('\n'):
 
+            if 'Version information' in line:
+                start = True
+                continue
+
             if start:
 
                 if '=>' in line:
@@ -67,17 +78,32 @@ class GNU_ldd(object):
                         depend[name].add(lib)
                 elif line:
                     name = line.strip().strip(':')  # e.g. "/usr/bin/ls"
-                    if name != command:
-                        depend[command].add(name)
-
-            elif 'Version information' in line:
-                start = True
 
         return depend
 
+    @staticmethod
+    def _parse_unused(command: str, unused: str) -> dict:
+
+        start = False   # flag for parsing
+        name = ''       # shared object's name as key
+        unused_depend = { command: set() }     # dict for result
+                                               # dict: str -> set
+
+        for line in unused.split('\n'):
+
+            if 'Unused direct dependencies' in line:
+                start = True
+                continue
+
+            if start and line:
+                lib = line.strip()  # e.g. "/usr/lib/libcap.so.2"
+                unused_depend[command].add(lib)
+
+        return unused_depend
+
 
     @staticmethod
-    def _draw(command: str, depend: dict) -> str:
+    def _draw(command: str, depend: dict, unused_depend: dict) -> str:
         '''
         Generate graph in DOT.
         '''
@@ -86,9 +112,15 @@ class GNU_ldd(object):
 
         with redirect_stdout(dot):
             print('digraph graphname {')
+
             for key, values in depend.items():
                 for value in values:
                     print('    "{}" -> "{}"'.format(key, value))
+
+            for key, values in unused_depend.items():
+                for value in values:
+                    print('    "{}" -> "{}" [style=dotted]'.format(key, value))
+
             print('}')
 
         return dot.getvalue()
@@ -100,9 +132,10 @@ class GNU_ldd(object):
         method for user
         '''
 
-        result = self._get_result(command)
+        (result, unused) = self._get_result(command)
         depend = self._parse_result(command, result)
-        print(self._draw(command, depend), end='')
+        unused_depend = self._parse_unused(command, unused)
+        print(self._draw(command, depend, unused_depend), end='')
 
 
 if __name__ == '__main__':
